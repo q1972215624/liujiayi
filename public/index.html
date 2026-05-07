@@ -422,8 +422,19 @@
 
         function initLevel() {
             const config = getLevelConfig(currentLevel);
-            const emojiSet = emojiSets[(currentLevel - 1) % emojiSets.length];
-            const selectedEmojis = emojiSet.slice(0, config.pairs);
+
+            // 从多个 emoji 集合中循环获取，确保有足够的 emoji
+            const selectedEmojis = [];
+            let setIndex = 0;
+            while (selectedEmojis.length < config.pairs) {
+                const emojiSet = emojiSets[(currentLevel - 1 + setIndex) % emojiSets.length];
+                for (const emoji of emojiSet) {
+                    if (selectedEmojis.length >= config.pairs) break;
+                    selectedEmojis.push(emoji);
+                }
+                setIndex++;
+            }
+
             let cards = [...selectedEmojis, ...selectedEmojis];
             const gridSize = config.size * config.size;
             while (cards.length < gridSize) {
