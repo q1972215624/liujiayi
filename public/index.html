@@ -114,6 +114,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .level-info {
@@ -126,13 +128,33 @@
             font-weight: bold;
         }
 
+        .score-info {
+            font-size: 1em;
+            color: #28a745;
+        }
+
+        .score-info span {
+            font-weight: bold;
+        }
+
         .progress-info {
             font-size: 1em;
             color: #666;
+            width: 100%;
         }
 
         .progress-info span {
             color: #764ba2;
+            font-weight: bold;
+        }
+
+        .streak-info {
+            font-size: 0.95em;
+            color: #ff9800;
+            width: 100%;
+        }
+
+        .streak-info span {
             font-weight: bold;
         }
 
@@ -252,10 +274,38 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        .perfect-bonus {
+            color: #ff9800;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+
+        .sound-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1.2em;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: background 0.2s;
+        }
+
+        .sound-toggle:hover {
+            background: #f0f0f0;
+        }
     </style>
 </head>
 <body>
+    <button class="sound-toggle" id="soundToggle" onclick="toggleSound()">🔊</button>
+
     <div class="container">
+        <!-- 开始界面 -->
         <div class="start-screen" id="startScreen">
             <h1>消消乐</h1>
             <p style="color: #666; margin-bottom: 20px;">点击相同的 emoji 消除它们</p>
@@ -267,33 +317,91 @@
             <button class="reset-btn" id="resetBtn" onclick="resetGame()" style="display: none; margin-top: 15px;">重置进度</button>
         </div>
 
+        <!-- 游戏界面 -->
         <div class="game-screen" id="gameScreen">
             <div class="game-header">
                 <div class="level-info">关卡 <span id="levelDisplay">1</span></div>
+                <div class="score-info">得分 <span id="scoreDisplay">0</span></div>
                 <div class="progress-info">剩余 <span id="remainingDisplay">0</span> 对</div>
+                <div class="streak-info" id="streakInfo"></div>
             </div>
             <div class="game-board" id="gameBoard"></div>
             <button class="back-btn" onclick="backToStart()">返回主页</button>
         </div>
 
+        <!-- 通关界面 -->
         <div class="win-screen" id="winScreen">
-            <h2>恭喜通关!</h2>
+            <h2>🎉 恭喜通关!</h2>
             <p class="win-message">即将进入第 <span id="nextLevelDisplay">2</span> 关</p>
             <button class="next-btn" onclick="nextLevel()">下一关</button>
             <div class="win-stats">
                 <p>已通关 <span id="totalClearedDisplay">0</span> 关</p>
+                <p id="scoreText">本关得分：<span>0</span></p>
                 <p id="recordText"></p>
             </div>
+            <div class="perfect-bonus" id="perfectBonus" style="display: none;"></div>
         </div>
     </div>
 
     <script>
+        // ========== 音频系统 ==========
+        let soundEnabled = true;
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundToggle').textContent = soundEnabled ? '🔊' : '🔇';
+        }
+
+        function speak(text, callback) {
+            if (!soundEnabled) {
+                if (callback) callback();
+                return;
+            }
+
+            if ('speechSynthesis' in window) {
+                // 取消之前的语音
+                speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 1.1;
+                utterance.pitch = 1;
+
+                // 尝试选择中文语音
+                const voices = speechSynthesis.getVoices();
+                const chineseVoice = voices.find(v => v.lang.includes('zh'));
+                if (chineseVoice) {
+                    utterance.voice = chineseVoice;
+                }
+
+                utterance.onend = () => {
+                    if (callback) callback();
+                };
+
+                utterance.onerror = () => {
+                    if (callback) callback();
+                };
+
+                speechSynthesis.speak(utterance);
+            } else {
+                if (callback) callback();
+            }
+        }
+
+        // 预加载语音
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        }
+
+        // ========== LocalStorage 存储管理 ==========
         const STORAGE_KEY = 'xiaoxiaole_game';
 
         function saveGame() {
             const data = {
                 currentLevel: currentLevel,
-                totalCleared: totalCleared,
+                totalScore: totalScore,
+                currentStreak: currentStreak,
                 savedAt: new Date().toISOString()
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -322,16 +430,32 @@
             return false;
         }
 
+        function saveTotalScore() {
+            const key = 'xiaoxiaole_total_score';
+            const current = localStorage.getItem(key);
+            const total = current ? parseInt(current) : 0;
+            if (totalScore > total) {
+                localStorage.setItem(key, totalScore.toString());
+            }
+        }
+
         function getBestRecord() {
             const best = localStorage.getItem('xiaoxiaole_best');
             return best ? parseInt(best) : 0;
         }
 
+        function getTotalScore() {
+            const total = localStorage.getItem('xiaoxiaole_total_score');
+            return total ? parseInt(total) : 0;
+        }
+
         function clearAllData() {
             localStorage.removeItem(STORAGE_KEY);
             localStorage.removeItem('xiaoxiaole_best');
+            localStorage.removeItem('xiaoxiaole_total_score');
         }
 
+        // ========== 游戏配置 ==========
         const emojiSets = [
             ['🍎', '🍊', '🍋', '🍇', '🍓', '🍒', '🍑', '🥝'],
             ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'],
@@ -352,16 +476,22 @@
             { size: 6, pairs: 18 },
         ];
 
+        // ========== 游戏状态 ==========
         let currentLevel = 1;
-        let totalCleared = 0;
+        let totalScore = 0;
+        let currentStreak = 0;  // 连续无失误关卡数
+        let levelScore = 0;     // 本关得分
         let selectedCards = [];
         let matchedPairs = 0;
         let totalPairs = 0;
         let canClick = true;
+        let hasMistake = false; // 本关是否有失误
 
+        // ========== 初始化 ==========
         function init() {
             const saved = loadGame();
             const best = getBestRecord();
+
             const continueBtn = document.getElementById('continueBtn');
             const statsDisplay = document.getElementById('statsDisplay');
             const resetBtn = document.getElementById('resetBtn');
@@ -369,14 +499,15 @@
             if (saved) {
                 continueBtn.style.display = 'block';
                 resetBtn.style.display = 'inline-block';
-                statsDisplay.innerHTML = `最高记录：<span>第 ${best} 关</span>`;
+                statsDisplay.innerHTML = `最高记录：<span>第 ${best} 关</span> | 总得分：<span>${saved.totalScore || 0}</span>`;
             } else {
                 continueBtn.style.display = 'none';
                 resetBtn.style.display = 'none';
-                statsDisplay.innerHTML = best > 0 ? `最高记录：<span>第 ${best} 关</span>` : '';
+                statsDisplay.innerHTML = best > 0 ? `最高记录：<span>第 ${best} 关</span> | 总得分：<span>${getTotalScore()}</span>` : '';
             }
         }
 
+        // ========== 游戏逻辑 ==========
         function getLevelConfig(level) {
             const index = Math.min(level - 1, levelConfigs.length - 1);
             return levelConfigs[index];
@@ -393,11 +524,13 @@
 
         function startNewGame() {
             currentLevel = 1;
-            totalCleared = 0;
+            totalScore = 0;
+            currentStreak = 0;
             localStorage.removeItem(STORAGE_KEY);
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('winScreen').style.display = 'none';
             document.getElementById('gameScreen').style.display = 'block';
+            speak('开始游戏');
             initLevel();
         }
 
@@ -405,10 +538,12 @@
             const saved = loadGame();
             if (saved) {
                 currentLevel = saved.currentLevel;
-                totalCleared = saved.totalCleared;
+                totalScore = saved.totalScore || 0;
+                currentStreak = saved.currentStreak || 0;
                 document.getElementById('startScreen').style.display = 'none';
                 document.getElementById('winScreen').style.display = 'none';
                 document.getElementById('gameScreen').style.display = 'block';
+                speak(`继续游戏，第 ${currentLevel} 关`);
                 initLevel();
             }
         }
@@ -416,6 +551,8 @@
         function resetGame() {
             if (confirm('确定要重置所有游戏进度吗？')) {
                 clearAllData();
+                currentScore = 0;
+                currentStreak = 0;
                 init();
             }
         }
@@ -423,7 +560,6 @@
         function initLevel() {
             const config = getLevelConfig(currentLevel);
 
-            // 从多个 emoji 集合中循环获取，确保有足够的 emoji
             const selectedEmojis = [];
             let setIndex = 0;
             while (selectedEmojis.length < config.pairs) {
@@ -446,9 +582,15 @@
             totalPairs = config.pairs;
             selectedCards = [];
             canClick = true;
+            levelScore = 0;
+            hasMistake = false;
 
             document.getElementById('levelDisplay').textContent = currentLevel;
+            document.getElementById('scoreDisplay').textContent = totalScore;
             document.getElementById('remainingDisplay').textContent = totalPairs;
+
+            // 显示连续无失误信息
+            updateStreakInfo();
 
             const board = document.getElementById('gameBoard');
             board.style.gridTemplateColumns = `repeat(${config.size}, 60px)`;
@@ -471,6 +613,15 @@
             });
 
             saveGame();
+        }
+
+        function updateStreakInfo() {
+            const streakInfo = document.getElementById('streakInfo');
+            if (currentStreak >= 2) {
+                streakInfo.innerHTML = `🔥 连续 ${currentStreak} 关无失误！再 ${3 - currentStreak} 关可获得奖励`;
+            } else {
+                streakInfo.innerHTML = '';
+            }
         }
 
         function selectCard(card) {
@@ -501,8 +652,11 @@
                     card2.classList.remove('selected');
 
                     matchedPairs++;
-                    totalCleared++;
+                    // 匹配成功得10分
+                    levelScore += 10;
+                    totalScore += 10;
                     document.getElementById('remainingDisplay').textContent = totalPairs - matchedPairs;
+                    document.getElementById('scoreDisplay').textContent = totalScore;
 
                     selectedCards = [];
                     canClick = true;
@@ -514,6 +668,10 @@
                     }
                 }, 300);
             } else {
+                hasMistake = true;
+                currentStreak = 0; // 重置连续无失误
+                updateStreakInfo();
+
                 setTimeout(() => {
                     card1.classList.remove('selected');
                     card2.classList.remove('selected');
@@ -525,11 +683,36 @@
 
         function showWinScreen() {
             const isNewRecord = saveBestRecord(currentLevel);
+            saveTotalScore();
+
+            // 计算本关奖励
+            let bonusText = '';
+            if (!hasMistake) {
+                // 无失误奖励：基础分 * 关卡数 * 连续无失误加成
+                const streakBonus = Math.floor(levelScore * (currentStreak + 1) * 0.5);
+                totalScore += streakBonus;
+                levelScore += streakBonus;
+                currentStreak++;
+
+                document.getElementById('scoreDisplay').textContent = totalScore;
+
+                // 检查是否触发"干得漂亮"
+                if (currentStreak >= 3) {
+                    bonusText = `🎉 ${streakBonus} 分无失误奖励！干得漂亮！`;
+                    speak('干得漂亮！');
+                } else {
+                    bonusText = `✨ ${streakBonus} 分无失误奖励！`;
+                    speak(`${currentStreak} 关连续无失误`);
+                }
+            } else {
+                speak('有点意思');
+            }
 
             document.getElementById('gameScreen').style.display = 'none';
             document.getElementById('winScreen').style.display = 'block';
             document.getElementById('nextLevelDisplay').textContent = currentLevel + 1;
             document.getElementById('totalClearedDisplay').textContent = currentLevel;
+            document.getElementById('scoreText').innerHTML = `本关得分：<span>${levelScore}</span>`;
 
             const recordText = document.getElementById('recordText');
             if (isNewRecord) {
@@ -538,11 +721,21 @@
                 recordText.innerHTML = `最高记录：<span>第 ${getBestRecord()} 关</span>`;
             }
 
+            const perfectBonus = document.getElementById('perfectBonus');
+            if (bonusText) {
+                perfectBonus.style.display = 'block';
+                perfectBonus.textContent = bonusText;
+            } else {
+                perfectBonus.style.display = 'none';
+            }
+
+            // 清除存档
             localStorage.removeItem(STORAGE_KEY);
         }
 
         function nextLevel() {
             currentLevel++;
+            saveGame();
             document.getElementById('winScreen').style.display = 'none';
             document.getElementById('gameScreen').style.display = 'block';
             initLevel();
