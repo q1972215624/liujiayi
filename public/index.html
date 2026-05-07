@@ -40,6 +40,13 @@
             display: block;
         }
 
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
         .start-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -54,6 +61,48 @@
         .start-btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .continue-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 1.1em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .continue-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .reset-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 0.9em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .reset-btn:hover {
+            background: #c82333;
+        }
+
+        .stats {
+            margin-top: 20px;
+            color: #666;
+            font-size: 1em;
+        }
+
+        .stats span {
+            color: #667eea;
+            font-weight: bold;
         }
 
         .game-screen {
@@ -182,10 +231,26 @@
             box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
         }
 
-        .tip {
-            color: #999;
-            font-size: 0.9em;
-            margin-top: 15px;
+        .win-stats {
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .win-stats span {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .new-record {
+            color: #dc3545;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -194,7 +259,12 @@
         <div class="start-screen" id="startScreen">
             <h1>消消乐</h1>
             <p style="color: #666; margin-bottom: 20px;">点击相同的 emoji 消除它们</p>
-            <button class="start-btn" onclick="startGame()">开始游戏</button>
+            <div class="btn-group">
+                <button class="start-btn" onclick="startNewGame()">开始游戏</button>
+                <button class="continue-btn" id="continueBtn" onclick="continueGame()" style="display: none;">继续游戏</button>
+            </div>
+            <div class="stats" id="statsDisplay"></div>
+            <button class="reset-btn" id="resetBtn" onclick="resetGame()" style="display: none; margin-top: 15px;">重置进度</button>
         </div>
 
         <div class="game-screen" id="gameScreen">
@@ -210,11 +280,58 @@
             <h2>恭喜通关!</h2>
             <p class="win-message">即将进入第 <span id="nextLevelDisplay">2</span> 关</p>
             <button class="next-btn" onclick="nextLevel()">下一关</button>
-            <p class="tip">共 <span id="totalClearedDisplay">0</span> 对已消除</p>
+            <div class="win-stats">
+                <p>已通关 <span id="totalClearedDisplay">0</span> 关</p>
+                <p id="recordText"></p>
+            </div>
         </div>
     </div>
 
     <script>
+        const STORAGE_KEY = 'xiaoxiaole_game';
+
+        function saveGame() {
+            const data = {
+                currentLevel: currentLevel,
+                totalCleared: totalCleared,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        function loadGame() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                try {
+                    return JSON.parse(data);
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        function saveBestRecord(level) {
+            const key = 'xiaoxiaole_best';
+            const current = localStorage.getItem(key);
+            const best = current ? parseInt(current) : 0;
+            if (level > best) {
+                localStorage.setItem(key, level.toString());
+                return true;
+            }
+            return false;
+        }
+
+        function getBestRecord() {
+            const best = localStorage.getItem('xiaoxiaole_best');
+            return best ? parseInt(best) : 0;
+        }
+
+        function clearAllData() {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem('xiaoxiaole_best');
+        }
+
         const emojiSets = [
             ['🍎', '🍊', '🍋', '🍇', '🍓', '🍒', '🍑', '🥝'],
             ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'],
@@ -242,6 +359,24 @@
         let totalPairs = 0;
         let canClick = true;
 
+        function init() {
+            const saved = loadGame();
+            const best = getBestRecord();
+            const continueBtn = document.getElementById('continueBtn');
+            const statsDisplay = document.getElementById('statsDisplay');
+            const resetBtn = document.getElementById('resetBtn');
+
+            if (saved) {
+                continueBtn.style.display = 'block';
+                resetBtn.style.display = 'inline-block';
+                statsDisplay.innerHTML = `最高记录：<span>第 ${best} 关</span>`;
+            } else {
+                continueBtn.style.display = 'none';
+                resetBtn.style.display = 'none';
+                statsDisplay.innerHTML = best > 0 ? `最高记录：<span>第 ${best} 关</span>` : '';
+            }
+        }
+
         function getLevelConfig(level) {
             const index = Math.min(level - 1, levelConfigs.length - 1);
             return levelConfigs[index];
@@ -256,13 +391,33 @@
             return arr;
         }
 
-        function startGame() {
+        function startNewGame() {
             currentLevel = 1;
             totalCleared = 0;
+            localStorage.removeItem(STORAGE_KEY);
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('winScreen').style.display = 'none';
             document.getElementById('gameScreen').style.display = 'block';
             initLevel();
+        }
+
+        function continueGame() {
+            const saved = loadGame();
+            if (saved) {
+                currentLevel = saved.currentLevel;
+                totalCleared = saved.totalCleared;
+                document.getElementById('startScreen').style.display = 'none';
+                document.getElementById('winScreen').style.display = 'none';
+                document.getElementById('gameScreen').style.display = 'block';
+                initLevel();
+            }
+        }
+
+        function resetGame() {
+            if (confirm('确定要重置所有游戏进度吗？')) {
+                clearAllData();
+                init();
+            }
         }
 
         function initLevel() {
@@ -303,6 +458,8 @@
 
                 board.appendChild(card);
             });
+
+            saveGame();
         }
 
         function selectCard(card) {
@@ -339,6 +496,8 @@
                     selectedCards = [];
                     canClick = true;
 
+                    saveGame();
+
                     if (matchedPairs === totalPairs) {
                         setTimeout(showWinScreen, 500);
                     }
@@ -354,10 +513,21 @@
         }
 
         function showWinScreen() {
+            const isNewRecord = saveBestRecord(currentLevel);
+
             document.getElementById('gameScreen').style.display = 'none';
             document.getElementById('winScreen').style.display = 'block';
             document.getElementById('nextLevelDisplay').textContent = currentLevel + 1;
-            document.getElementById('totalClearedDisplay').textContent = totalCleared;
+            document.getElementById('totalClearedDisplay').textContent = currentLevel;
+
+            const recordText = document.getElementById('recordText');
+            if (isNewRecord) {
+                recordText.innerHTML = '<span class="new-record">🎉 新纪录！</span>';
+            } else {
+                recordText.innerHTML = `最高记录：<span>第 ${getBestRecord()} 关</span>`;
+            }
+
+            localStorage.removeItem(STORAGE_KEY);
         }
 
         function nextLevel() {
@@ -371,7 +541,10 @@
             document.getElementById('gameScreen').style.display = 'none';
             document.getElementById('winScreen').style.display = 'none';
             document.getElementById('startScreen').style.display = 'block';
+            init();
         }
+
+        window.onload = init;
     </script>
 </body>
 </html>
