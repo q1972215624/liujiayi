@@ -3,9 +3,375 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>哈喽</title>
+    <title>消消乐</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 30px 50px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .start-screen {
+            display: block;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 50px;
+            font-size: 1.3em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .start-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .game-screen {
+            display: none;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .level-info {
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        .level-info span {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .progress-info {
+            font-size: 1em;
+            color: #666;
+        }
+
+        .progress-info span {
+            color: #764ba2;
+            font-weight: bold;
+        }
+
+        .game-board {
+            display: grid;
+            gap: 8px;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        .card {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .card.matched {
+            background: #d4edda;
+            animation: matchPulse 0.3s;
+        }
+
+        .card.selected {
+            background: #cce5ff;
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+        }
+
+        .card.hidden {
+            visibility: hidden;
+        }
+
+        @keyframes matchPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .back-btn {
+            margin-top: 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            font-size: 1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #5a6268;
+        }
+
+        .win-screen {
+            display: none;
+        }
+
+        .win-screen h2 {
+            color: #28a745;
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+
+        .win-message {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+        }
+
+        .next-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 50px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .next-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .tip {
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 15px;
+        }
+    </style>
 </head>
 <body>
-    <h1>哈喽</h1>
+    <div class="container">
+        <div class="start-screen" id="startScreen">
+            <h1>消消乐</h1>
+            <p style="color: #666; margin-bottom: 20px;">点击相同的 emoji 消除它们</p>
+            <button class="start-btn" onclick="startGame()">开始游戏</button>
+        </div>
+
+        <div class="game-screen" id="gameScreen">
+            <div class="game-header">
+                <div class="level-info">关卡 <span id="levelDisplay">1</span></div>
+                <div class="progress-info">剩余 <span id="remainingDisplay">0</span> 对</div>
+            </div>
+            <div class="game-board" id="gameBoard"></div>
+            <button class="back-btn" onclick="backToStart()">返回主页</button>
+        </div>
+
+        <div class="win-screen" id="winScreen">
+            <h2>恭喜通关!</h2>
+            <p class="win-message">即将进入第 <span id="nextLevelDisplay">2</span> 关</p>
+            <button class="next-btn" onclick="nextLevel()">下一关</button>
+            <p class="tip">共 <span id="totalClearedDisplay">0</span> 对已消除</p>
+        </div>
+    </div>
+
+    <script>
+        const emojiSets = [
+            ['🍎', '🍊', '🍋', '🍇', '🍓', '🍒', '🍑', '🥝'],
+            ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼'],
+            ['🌸', '🌺', '🌻', '🌷', '🌹', '💐', '🌼', '🌵'],
+            ['⭐', '🌙', '☀️', '⚡', '🔥', '💧', '🌈', '❄️'],
+            ['🎈', '🎁', '🎀', '🎯', '🎲', '🎮', '🎭', '🎪'],
+            ['🚀', '✈️', '🚁', '🚢', '🚂', '🚗', '🏎️', '🚲']
+        ];
+
+        const levelConfigs = [
+            { size: 4, pairs: 8 },
+            { size: 4, pairs: 8 },
+            { size: 4, pairs: 8 },
+            { size: 5, pairs: 10 },
+            { size: 5, pairs: 10 },
+            { size: 5, pairs: 10 },
+            { size: 6, pairs: 18 },
+            { size: 6, pairs: 18 },
+        ];
+
+        let currentLevel = 1;
+        let totalCleared = 0;
+        let selectedCards = [];
+        let matchedPairs = 0;
+        let totalPairs = 0;
+        let canClick = true;
+
+        function getLevelConfig(level) {
+            const index = Math.min(level - 1, levelConfigs.length - 1);
+            return levelConfigs[index];
+        }
+
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function startGame() {
+            currentLevel = 1;
+            totalCleared = 0;
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('winScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            initLevel();
+        }
+
+        function initLevel() {
+            const config = getLevelConfig(currentLevel);
+            const emojiSet = emojiSets[(currentLevel - 1) % emojiSets.length];
+            const selectedEmojis = emojiSet.slice(0, config.pairs);
+            let cards = [...selectedEmojis, ...selectedEmojis];
+            const gridSize = config.size * config.size;
+            while (cards.length < gridSize) {
+                cards.push('');
+            }
+            cards = shuffle(cards);
+
+            matchedPairs = 0;
+            totalPairs = config.pairs;
+            selectedCards = [];
+            canClick = true;
+
+            document.getElementById('levelDisplay').textContent = currentLevel;
+            document.getElementById('remainingDisplay').textContent = totalPairs;
+
+            const board = document.getElementById('gameBoard');
+            board.style.gridTemplateColumns = `repeat(${config.size}, 60px)`;
+            board.innerHTML = '';
+
+            cards.forEach((emoji, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.textContent = emoji;
+                card.dataset.index = index;
+                card.dataset.emoji = emoji;
+
+                if (emoji === '') {
+                    card.classList.add('hidden');
+                } else {
+                    card.addEventListener('click', () => selectCard(card));
+                }
+
+                board.appendChild(card);
+            });
+        }
+
+        function selectCard(card) {
+            if (!canClick) return;
+            if (card.classList.contains('matched')) return;
+            if (card.classList.contains('selected')) return;
+            if (card.textContent === '') return;
+
+            card.classList.add('selected');
+            selectedCards.push(card);
+
+            if (selectedCards.length === 2) {
+                canClick = false;
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = selectedCards;
+            const emoji1 = card1.dataset.emoji;
+            const emoji2 = card2.dataset.emoji;
+
+            if (emoji1 === emoji2) {
+                setTimeout(() => {
+                    card1.classList.add('matched');
+                    card2.classList.add('matched');
+                    card1.classList.remove('selected');
+                    card2.classList.remove('selected');
+
+                    matchedPairs++;
+                    totalCleared++;
+                    document.getElementById('remainingDisplay').textContent = totalPairs - matchedPairs;
+
+                    selectedCards = [];
+                    canClick = true;
+
+                    if (matchedPairs === totalPairs) {
+                        setTimeout(showWinScreen, 500);
+                    }
+                }, 300);
+            } else {
+                setTimeout(() => {
+                    card1.classList.remove('selected');
+                    card2.classList.remove('selected');
+                    selectedCards = [];
+                    canClick = true;
+                }, 600);
+            }
+        }
+
+        function showWinScreen() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('winScreen').style.display = 'block';
+            document.getElementById('nextLevelDisplay').textContent = currentLevel + 1;
+            document.getElementById('totalClearedDisplay').textContent = totalCleared;
+        }
+
+        function nextLevel() {
+            currentLevel++;
+            document.getElementById('winScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            initLevel();
+        }
+
+        function backToStart() {
+            document.getElementById('gameScreen').style.display = 'none';
+            document.getElementById('winScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+        }
+    </script>
 </body>
 </html>
